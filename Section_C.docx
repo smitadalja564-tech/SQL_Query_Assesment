@@ -1,0 +1,291 @@
+import pandas as pd
+import numpy as np
+import sqlite3
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+cleaned_df = None
+sql_result = None
+
+def load_and_clean_data():
+    global cleaned_df
+
+    data = {
+        "order_id": range(1, 21),
+        "customer_name": [
+            "A","B","C","D","E","F","G","H","I","J",
+            "K","L","M","N","O","P","Q","R","S","T"
+        ],
+        "restaurant_name": [
+            "Pizza Hub","Burger Point","Pizza Hub","Food Court",
+            "Burger Point","Spice House","Food Court","Pizza Hub",
+            "Burger Point","Spice House","Food Court","Pizza Hub",
+            "Burger Point","Spice House","Food Court","Pizza Hub",
+            "Burger Point","Spice House","Food Court","Pizza Hub"
+        ],
+        "category": [
+            "Pizza","Burger","Pizza",None,"Burger",
+            "Indian","Indian","Pizza",None,"Indian",
+            "Burger","Pizza","Burger","Indian",
+            "Burger",None,"Burger","Indian",
+            "Burger","Pizza"
+        ],
+        "city": [
+            "Surat","Ahmedabad","Surat","Rajkot","Surat",
+            "Vadodara","Rajkot","Surat","Ahmedabad","Vadodara",
+            "Rajkot","Surat","Ahmedabad","Vadodara",
+            "Rajkot","Surat","Ahmedabad","Vadodara",
+            "Rajkot","Surat"
+        ],
+        "delivery_time_mins": [
+            30,35,None,25,40,45,50,None,38,42,
+            30,28,35,40,None,27,32,36,45,31
+        ],
+        "order_value": [
+            450,600,700,None,550,650,12000,700,
+            580,None,620,500,560,680,710,520,
+            None,690,640,560
+        ],
+        "rating": [
+            4.5,4.2,None,4.1,4.8,4.0,3.9,4.6,
+            None,4.3,4.2,4.7,4.5,4.1,4.0,
+            None,4.6,4.3,4.4,4.7
+        ]
+    }
+
+    df = pd.DataFrame(data)
+
+    df = pd.concat([df, df.iloc[[0,1,2]]], ignore_index=True)
+
+    print("\n----- BEFORE CLEANING -----")
+    print("Shape:", df.shape)
+    print(df.isnull().sum())
+
+    df["delivery_time_mins"].fillna(
+        df["delivery_time_mins"].median(),
+        inplace=True
+    )
+
+    df["order_value"].fillna(
+        df["order_value"].median(),
+        inplace=True
+    )
+
+    df["rating"].fillna(
+        round(df["rating"].mean(), 1),
+        inplace=True
+    )
+
+    df["category"].fillna(
+        df["category"].mode()[0],
+        inplace=True
+    )
+
+    df.drop_duplicates(inplace=True)
+
+    Q1 = df["order_value"].quantile(0.25)
+    Q3 = df["order_value"].quantile(0.75)
+
+    IQR = Q3 - Q1
+
+    upper_fence = Q3 + (1.5 * IQR)
+
+    df["order_value"] = df["order_value"].clip(
+        upper=upper_fence
+    )
+
+    cleaned_df = df
+
+    print("\n----- AFTER CLEANING -----")
+    print("Shape:", cleaned_df.shape)
+    print(cleaned_df.isnull().sum())
+
+    print("\nData Cleaning Completed Successfully")
+
+
+def run_sql_analysis():
+    global sql_result
+
+    conn = sqlite3.connect("food_delivery.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS restaurants(
+        restaurant_id INTEGER PRIMARY KEY,
+        name TEXT,
+        category TEXT,
+        city TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS orders(
+        order_id INTEGER PRIMARY KEY,
+        restaurant_id INTEGER,
+        order_value REAL,
+        delivery_time_mins REAL,
+        rating REAL
+    )
+    """)
+
+    restaurants = [
+        (1,'Pizza Hub','Pizza','Surat'),
+        (2,'Burger Point','Burger','Ahmedabad'),
+        (3,'Spice House','Indian','Vadodara'),
+        (4,'Food Court','Fast Food','Rajkot')
+    ]
+
+    orders = [
+        (1,1,500,30,4.5),
+        (2,1,650,28,4.8),
+        (3,2,550,35,4.2),
+        (4,3,700,40,4.7),
+        (5,4,450,25,4.1),
+        (6,2,620,32,4.4),
+        (7,3,800,38,4.9),
+        (8,1,580,29,4.6)
+    ]
+
+    cursor.executemany(
+        "INSERT OR REPLACE INTO restaurants VALUES (?,?,?,?)",
+        restaurants
+    )
+
+    cursor.executemany(
+        "INSERT OR REPLACE INTO orders VALUES (?,?,?,?,?)",
+        orders
+    )
+
+    conn.commit()
+
+    print("\n----- SQL QUERY 1 -----")
+
+    query1 = """
+    SELECT
+        restaurant_id,
+        COUNT(*) AS total_orders,
+        SUM(order_value) AS total_revenue,
+        ROUND(AVG(rating),2) AS avg_rating
+    FROM orders
+    GROUP BY restaurant_id
+    """
+
+    sql_result = pd.read_sql_query(query1, conn)
+
+    print(sql_result)
+
+    print("\n----- SQL QUERY 2 (JOIN) -----")
+
+    query2 = """
+    SELECT
+        r.name,
+        r.city,
+        o.order_value,
+        o.rating
+    FROM restaurants r
+    JOIN orders o
+    ON r.restaurant_id = o.restaurant_id
+    """
+
+    join_result = pd.read_sql_query(query2, conn)
+
+    print(join_result)
+
+    conn.close()
+
+
+def view_charts():
+
+    if cleaned_df is None:
+        print("Please load data first.")
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    sns.countplot(
+        data=cleaned_df,
+        x="category",
+        ax=axes[0]
+    )
+
+    axes[0].set_title("Orders by Category")
+    axes[0].set_xlabel("Category")
+    axes[0].set_ylabel("Order Count")
+
+    city_avg = cleaned_df.groupby("city")[
+        "delivery_time_mins"
+    ].mean().reset_index()
+
+    sns.barplot(
+        data=city_avg,
+        x="city",
+        y="delivery_time_mins",
+        ax=axes[1]
+    )
+
+    axes[1].set_title("Average Delivery Time by City")
+    axes[1].set_xlabel("City")
+    axes[1].set_ylabel("Average Delivery Time")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def export_report():
+
+    if cleaned_df is None:
+        print("Load and clean data first.")
+        return
+
+    with pd.ExcelWriter(
+        "food_delivery_report.xlsx"
+    ) as writer:
+
+        cleaned_df.to_excel(
+            writer,
+            sheet_name="Cleaned_Data",
+            index=False
+        )
+
+        if sql_result is not None:
+            sql_result.to_excel(
+                writer,
+                sheet_name="SQL_Analysis",
+                index=False
+            )
+
+    print(
+        "\nReport exported successfully as "
+        "food_delivery_report.xlsx"
+    )
+
+
+while True:
+
+    print("\n========== FOOD DELIVERY ANALYTICS ==========")
+    print("1. Load & Clean Data")
+    print("2. Run SQL Analysis")
+    print("3. View Charts")
+    print("4. Export Report")
+    print("0. Exit")
+
+    choice = input("Enter Choice: ")
+
+    if choice == "1":
+        load_and_clean_data()
+
+    elif choice == "2":
+        run_sql_analysis()
+
+    elif choice == "3":
+        view_charts()
+
+    elif choice == "4":
+        export_report()
+
+    elif choice == "0":
+        print("Application Closed.")
+        break
+
+    else:
+        print("Invalid Choice")
