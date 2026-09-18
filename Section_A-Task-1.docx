@@ -1,0 +1,27 @@
+import numpy as np
+
+np.random.seed(42)
+
+orders = np.random.randint(100, 801, 30)
+revenue = np.random.uniform(5000, 50000, 30)
+
+print("Total Orders:", np.sum(orders))
+print("Total Revenue:", round(np.sum(revenue), 2))
+
+print("Mean Daily Orders:", round(np.mean(orders), 2))
+print("Standard Deviation of Orders:", round(np.std(orders), 2))
+
+highest_revenue_day = np.argmax(revenue)
+print("Highest Revenue Day Index:", highest_revenue_day)
+
+threshold = np.mean(orders) + np.std(orders)
+peak_days = orders > threshold
+
+print("Peak Days Count:", np.sum(peak_days))
+print("Total Revenue from Peak Days:", round(np.sum(revenue[peak_days]), 2))
+
+weekly_orders = orders.reshape(5, 6)
+print("\nWeekly Order Totals:")
+
+for i, total in enumerate(np.sum(weekly_orders, axis=1), start=1):
+    print(f"Week {i}: {total}")

@@ -1,0 +1,96 @@
+import pandas as pd
+import numpy as np
+
+data = {
+    "order_id": range(1, 21),
+    "customer_name": [
+        "A","B","C","D","E","F","G","H","I","J",
+        "K","L","M","N","O","P","Q","R","S","T"
+    ],
+    "restaurant_name": [
+        "Pizza Hub","Burger Point","Pizza Hub","Food Court",
+        "Burger Point","Spice House","Food Court","Pizza Hub",
+        "Burger Point","Spice House","Food Court","Pizza Hub",
+        "Burger Point","Spice House","Food Court","Pizza Hub",
+        "Burger Point","Spice House","Food Court","Pizza Hub"
+    ],
+    "category": [
+        "Pizza","Burger","Pizza",None,"Burger",
+        "Indian","Indian","Pizza",None,"Indian",
+        "Burger","Pizza","Burger","Indian","Burger",
+        None,"Burger","Indian","Burger","Pizza"
+    ],
+    "delivery_time_mins": [
+        30,35,None,25,40,45,50,None,38,42,
+        30,28,35,40,None,27,32,36,45,31
+    ],
+    "order_value": [
+        450,600,700,None,550,650,12000,700,
+        580,None,620,500,560,680,710,520,
+        None,690,640,560
+    ],
+    "rating": [
+        4.5,4.2,None,4.1,4.8,4.0,3.9,4.6,
+        None,4.3,4.2,4.7,4.5,4.1,4.0,
+        None,4.6,4.3,4.4,4.7
+    ]
+}
+
+df = pd.DataFrame(data)
+
+df = pd.concat([df, df.iloc[[0,1,2]]], ignore_index=True)
+
+print("Null Count Before Filling")
+print(df.isnull().sum())
+
+df["delivery_time_mins"].fillna(
+    df["delivery_time_mins"].median(),
+    inplace=True
+)
+
+df["order_value"].fillna(
+    df["order_value"].median(),
+    inplace=True
+)
+
+df["rating"].fillna(
+    round(df["rating"].mean(),1),
+    inplace=True
+)
+
+df["category"].fillna(
+    df["category"].mode()[0],
+    inplace=True
+)
+
+print("\nNull Count After Filling")
+print(df.isnull().sum())
+
+print("\nShape Before Removing Duplicates:", df.shape)
+
+df = df.drop_duplicates()
+
+print("Shape After Removing Duplicates:", df.shape)
+
+Q1 = df["order_value"].quantile(0.25)
+Q3 = df["order_value"].quantile(0.75)
+
+IQR = Q3 - Q1
+
+lower_fence = Q1 - (1.5 * IQR)
+upper_fence = Q3 + (1.5 * IQR)
+
+outliers = df[
+    (df["order_value"] < lower_fence) |
+    (df["order_value"] > upper_fence)
+]
+
+print("\nOutlier Rows:")
+print(outliers)
+
+df["order_value"] = df["order_value"].clip(
+    upper=upper_fence
+)
+
+print("\nOutliers capped successfully.")
+``

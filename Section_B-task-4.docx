@@ -1,0 +1,112 @@
+import sqlite3
+import pandas as pd
+
+conn = sqlite3.connect("food_delivery.db")
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS restaurants(
+restaurant_id INTEGER PRIMARY KEY,
+name TEXT,
+category TEXT,
+city TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS orders(
+order_id INTEGER PRIMARY KEY,
+restaurant_id INTEGER,
+order_value REAL,
+delivery_time_mins REAL,
+rating REAL
+)
+""")
+
+restaurants = [
+(1,'Pizza Hub','Pizza','Surat'),
+(2,'Burger Point','Burger','Surat'),
+(3,'Spice House','Indian','Ahmedabad'),
+(4,'Food Corner','Fast Food','Rajkot'),
+(5,'Royal Dine','Indian','Surat'),
+(6,'Tasty Treat','Chinese','Vadodara'),
+(7,'Urban Cafe','Cafe','Surat'),
+(8,'Hot Bites','Fast Food','Ahmedabad')
+]
+
+cursor.executemany(
+"INSERT OR REPLACE INTO restaurants VALUES (?,?,?,?)",
+restaurants
+)
+
+orders = [
+(1,1,450,30,4.5),(2,1,600,28,4.8),
+(3,2,550,35,4.3),(4,3,800,40,4.6),
+(5,4,500,25,4.2),(6,5,900,45,4.9),
+(7,6,650,32,4.4),(8,7,700,30,4.5),
+(9,8,750,34,4.6),(10,1,620,29,4.7),
+(11,2,570,36,4.3),(12,3,890,42,4.8),
+(13,4,510,24,4.1),(14,5,940,46,4.7),
+(15,6,670,31,4.5),(16,7,690,29,4.6),
+(17,8,760,33,4.4),(18,1,580,30,4.7),
+(19,2,560,35,4.2),(20,3,910,41,4.8),
+(21,4,530,26,4.3),(22,5,920,47,4.9),
+(23,6,710,30,4.4),(24,7,720,28,4.8),
+(25,8,780,35,4.6)
+]
+
+cursor.executemany(
+"INSERT OR REPLACE INTO orders VALUES (?,?,?,?,?)",
+orders
+)
+
+conn.commit()
+
+query = """
+SELECT
+r.name,
+COUNT(o.order_id) AS total_orders,
+SUM(o.order_value) AS total_revenue,
+ROUND(AVG(o.rating),2) AS avg_rating
+FROM restaurants r
+JOIN orders o
+ON r.restaurant_id = o.restaurant_id
+GROUP BY r.name
+"""
+
+df = pd.read_sql_query(query, conn)
+
+df["revenue_rank"] = (
+df["total_revenue"]
+.rank(
+ascending=False,
+method="min"
+)
+.astype(int)
+)
+
+df = df.sort_values(
+"revenue_rank"
+)
+
+print(df)
+
+print("\nTop 5 Restaurants")
+
+print(
+df.sort_values(
+"total_revenue",
+ascending=False
+).head(5)
+)
+
+df.to_csv(
+"restaurant_performance_report.csv",
+index=False
+)
+
+print(
+"Report saved as restaurant_performance_report.csv"
+)
+
+conn.close()
